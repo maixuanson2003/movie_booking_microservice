@@ -1,0 +1,51 @@
+# Use with: docker compose -f compose.yaml -f compose.gateway.yaml up -d --build api-gateway
+services:
+  auth-service:
+    build:
+      context: ./auth-service
+      dockerfile: ../Dockerfile
+    ports:
+      - "127.0.0.1:9000:9000"
+    environment:
+      EUREKA_SERVER_URL: ${EUREKA_SERVER_URL:-http://host.docker.internal:8761/eureka/}
+      AUTH_USERNAME: ${AUTH_USERNAME:-demo}
+      AUTH_PASSWORD: ${AUTH_PASSWORD:?Set AUTH_PASSWORD in .env}
+      JWT_ISSUER_URI: ${JWT_ISSUER_URI:-http://localhost:9000}
+      AUTH_KEY_FILE: /app/data/signing-key.json
+      AUTH_REDIRECT_URI: ${AUTH_REDIRECT_URI:-http://127.0.0.1:3000/callback}
+      AUTH_ALLOWED_ORIGIN: ${AUTH_ALLOWED_ORIGIN:-http://127.0.0.1:3000}
+    volumes:
+      - auth-keys:/app/data
+  api-gateway:
+    build:
+      context: ./api-gateway
+      dockerfile: ../Dockerfile
+    ports:
+      - "127.0.0.1:8080:8080"
+    environment:
+      EUREKA_SERVER_URL: ${EUREKA_SERVER_URL:-http://host.docker.internal:8761/eureka/}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
+      JWT_ISSUER_URI: ${JWT_ISSUER_URI:-http://localhost:9000}
+      JWT_JWK_SET_URI: ${JWT_JWK_SET_URI:-http://auth-service:9000/oauth2/jwks}
+    depends_on:
+      movie-service:
+        condition: service_started
+      cinema-service:
+        condition: service_started
+      booking-service:
+        condition: service_started
+      payment-service:
+        condition: service_started
+      user-service:
+        condition: service_started
+      auth-service:
+        condition: service_started
+      redis:
+        condition: service_healthy
+
+volumes:
+  auth-keys:
+
+

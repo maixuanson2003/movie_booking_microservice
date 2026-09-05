@@ -1,0 +1,8 @@
+.env
+**/target/
+.idea/
+*.iml
+.maven-cache/
+**/data/signing-key.json
+auth-build.log
+gateway-build.log

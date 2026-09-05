@@ -1,0 +1,5 @@
+.git
+.env
+.idea
+**/target
+**/node_modules
