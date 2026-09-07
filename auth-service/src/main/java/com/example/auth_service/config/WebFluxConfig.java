@@ -1,6 +1,7 @@
 package com.example.auth_service.config;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -8,8 +9,9 @@ import org.springframework.web.reactive.function.client.WebClient;
 @Configuration
 public class WebFluxConfig {
     @Bean
-    public WebClient webClient(WebClient.Builder builder,
+    public WebClient webClient(ObjectProvider<WebClient.Builder> builders,
             @Value("${clients.user.base-url:http://localhost:8081}") String baseUrl) {
+        WebClient.Builder builder = builders.getIfAvailable(WebClient::builder);
         return builder.baseUrl(baseUrl).build();
     }
 }
