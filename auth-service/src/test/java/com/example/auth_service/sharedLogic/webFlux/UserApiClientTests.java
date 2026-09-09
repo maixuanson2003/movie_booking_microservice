@@ -13,12 +13,41 @@ import reactor.core.publisher.Mono;
 import static org.junit.jupiter.api.Assertions.*;
 
 class UserApiClientTests {
+    @Test
+    void registrationPostsAndDecodesLoginResult() {
+        var api = new UserApiClient(WebClient.builder().exchangeFunction(request -> {
+            assertEquals(org.springframework.http.HttpMethod.POST, request.method());
+            assertEquals("/api/users/register", request.url().getPath());
+            return Mono.just(ClientResponse.create(HttpStatus.OK).header("Content-Type", "application/json")
+                    .body("{\"success\":true,\"data\":{\"isLogin\":true,\"userDto\":{\"id\":42,\"username\":\"alice\"}}}")
+                    .build());
+        }).build(), Duration.ofSeconds(1));
+        var result = api.register(new com.example.auth_service.sharedLogic.dto.request.UserRegister(
+                "alice", "alice@example.com", "correct", null)).block();
+        assertNotNull(result);
+        assertTrue(result.isLogin());
+        assertEquals(42L, result.userDto().getId());
+    }
+
     private UserApiClient client(HttpStatus status, String body) {
         return new UserApiClient(WebClient.builder().exchangeFunction(request -> {
             assertEquals("/api/users/username/alice", request.url().getPath());
             return Mono.just(ClientResponse.create(status).header("Content-Type", "application/json")
                     .body(body).build());
         }).build(), Duration.ofSeconds(1));
+    }
+
+    @Test
+    void loginDecodesUserAndLoginFlag() {
+        var api = new UserApiClient(WebClient.builder().exchangeFunction(request ->
+                Mono.just(ClientResponse.create(HttpStatus.OK).header("Content-Type", "application/json")
+                        .body("{\"success\":true,\"data\":{\"isLogin\":true,\"userDto\":{\"id\":1,\"username\":\"alice\",\"password\":\"secret\"}}}")
+                        .build())).build(), Duration.ofSeconds(1));
+        var result = api.isLogin("alice", "correct").block();
+        assertNotNull(result);
+        assertTrue(result.isLogin());
+        assertEquals("alice", result.userDto().getUsername());
+        assertNull(result.userDto().getPassword());
     }
 
     @Test
@@ -54,7 +83,7 @@ class UserApiClientTests {
             return Mono.empty();
         }).build(), Duration.ofSeconds(1));
         assertThrows(BadRequestException.class, () -> api.getUserByUsername(null).block());
-        assertThrows(BadRequestException.class, () -> api.checkPassword("alice", "").block());
+        assertThrows(BadRequestException.class, () -> api.isLogin("alice", "").block());
         assertThrows(BadRequestException.class, () -> api.getUserByUsername(" ").block());
     }
 
@@ -85,11 +114,14 @@ class UserApiClientTests {
     void checksPasswordWithPostAndDecodesFalsePayload() {
         var api = new UserApiClient(WebClient.builder().exchangeFunction(request -> {
             assertEquals(org.springframework.http.HttpMethod.POST, request.method());
-            assertEquals("/api/users/check-password", request.url().getPath());
+            assertEquals("/api/users/isLogin", request.url().getPath());
             assertNull(request.url().getQuery());
             return Mono.just(ClientResponse.create(HttpStatus.OK).header("Content-Type", "application/json")
-                    .body("{\"success\":true,\"data\":false}").build());
+                    .body("{\"success\":true,\"data\":{\"userDto\":null,\"isLogin\":false}}").build());
         }).build(), Duration.ofSeconds(1));
-        assertEquals(Boolean.FALSE, api.checkPassword("alice", "wrong").block());
+        var result = api.isLogin("alice", "wrong").block();
+        assertNotNull(result);
+        assertFalse(result.isLogin());
+        assertNull(result.userDto());
     }
 }

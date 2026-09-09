@@ -19,10 +19,10 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         // These endpoints are called before the caller has a login token.
         return http
-                .csrf(csrf -> csrf.ignoringRequestMatchers("/api/users/check-password"))
+                .csrf(csrf -> csrf.ignoringRequestMatchers("/api/users/check-password", "/api/users/isLogin", "/api/users/register"))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.GET, "/api/users/username/*").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/users/check-password").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/users/check-password", "/api/users/isLogin", "/api/users/register").permitAll()
                         .anyRequest().authenticated())
                 .build();
     }

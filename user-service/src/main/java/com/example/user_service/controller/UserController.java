@@ -10,6 +10,8 @@ import org.springframework.web.bind.annotation.RestController;
 import com.example.user_service.service.UserService;
 import com.example.user_service.sharedLogic.dto.CheckPasswordRequest;
 import com.example.user_service.sharedLogic.dto.UserDTO;
+import com.example.user_service.sharedLogic.dto.LoginResult;
+import com.example.user_service.sharedLogic.dto.request.UserRegister;
 
 /** Login support for auth-service; responses are wrapped by ApiResponseAdvice. */
 @RestController
@@ -24,6 +26,16 @@ public class UserController {
     @GetMapping("/username/{username}")
     public UserDTO getUserByUsername(@PathVariable("username") String username) {
         return userService.getUserByUsername(username);
+    }
+
+    @PostMapping("/register")
+    public LoginResult register(@RequestBody UserRegister request) {
+        return userService.registerUser(request);
+    }
+
+    @PostMapping("/isLogin")
+    public LoginResult isLogin(@RequestBody CheckPasswordRequest request) {
+        return userService.isLogin(request.username(), request.password());
     }
 
     @PostMapping("/check-password")

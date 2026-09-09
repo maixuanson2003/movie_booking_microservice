@@ -4,10 +4,12 @@ import org.springframework.stereotype.Service;
 
 import com.example.auth_service.exception.BadRequestException;
 import com.example.auth_service.exception.UnauthorizedException;
-import com.example.auth_service.exception.ExternalServiceException;
+import com.example.auth_service.exception.UpstreamServiceException;
+import com.example.auth_service.sharedLogic.dto.LoginResult;
 import com.example.auth_service.sharedLogic.dto.AuthInfo;
 import com.example.auth_service.sharedLogic.dto.AuthResponse;
 import com.example.auth_service.sharedLogic.dto.UserDTO;
+import com.example.auth_service.sharedLogic.dto.request.UserRegister;
 import com.example.auth_service.sharedLogic.webFlux.UserApiClient;
 import reactor.core.publisher.Mono;
 
@@ -28,27 +30,35 @@ public class AuthService {
                         user.getFullName(), user.getRole()));
     }
 
+    public AuthResponse register(UserRegister request) {
+        LoginResult result = userApiClient.register(request).block();
+        if (result == null || !result.isLogin() || result.userDto() == null) {
+            throw new UpstreamServiceException("Invalid registration response from user service");
+        }
+        return createAuthResponse(result.userDto());
+    }
+
     public AuthResponse login(String username, String password) {
 
         if (username == null || username.isBlank() || password == null || password.isBlank()) {
             throw new BadRequestException("Username and password must not be blank");
         }
 
-        Mono<UserDTO> userMono = userApiClient.getUserByUsername(username);
+        LoginResult result = userApiClient.isLogin(username, password).block();
 
-        UserDTO userInfor = userMono.block();
+        if (result == null || !result.isLogin()) {
+            throw new UnauthorizedException("Invalid username or password");
+        }
 
+        UserDTO userInfor = result.userDto();
         if (userInfor == null) {
-            throw new UnauthorizedException("Invalid username or password");
+            throw new UpstreamServiceException("Login response is missing userDto");
         }
 
-        Mono<Boolean> passwordCheckMono = userApiClient.checkPassword(username, password);
-        Boolean isPasswordCorrect = passwordCheckMono.block();
+        return createAuthResponse(userInfor);
+    }
 
-        if (isPasswordCorrect == null || !isPasswordCorrect) {
-            throw new UnauthorizedException("Invalid username or password");
-        }
-
+    private AuthResponse createAuthResponse(UserDTO userInfor) {
         String token = this.jwtService.createToken(AuthInfo.builder()
                 .id(userInfor.getId())
                 .username(userInfor.getUsername())

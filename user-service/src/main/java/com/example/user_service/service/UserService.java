@@ -1,14 +1,19 @@
 package com.example.user_service.service;
 
+import java.util.Optional;
+
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.example.user_service.exception.BadRequestException;
 import com.example.user_service.exception.ResourceNotFoundException;
+import com.example.user_service.model.User;
 import com.example.user_service.repository.UserRepository;
 import com.example.user_service.sharedLogic.dto.CheckPasswordRequest;
+import com.example.user_service.sharedLogic.dto.LoginResult;
 import com.example.user_service.sharedLogic.dto.UserDTO;
+import com.example.user_service.sharedLogic.dto.request.UserRegister;
 import com.example.user_service.sharedLogic.mapper.UserMapper;
 
 @Service
@@ -24,6 +29,31 @@ public class UserService {
         this.passwordEncoder = passwordEncoder;
     }
 
+    @Transactional
+    public LoginResult registerUser(UserRegister userRegister) {
+
+        Optional<User> userOptional = repository.findByUsername(userRegister.getUsername());
+        if (!userOptional.isEmpty()) {
+            throw new BadRequestException("Username already exists");
+        }
+        Optional<User> emailOptional = repository.findByEmail(userRegister.getEmail());
+
+        if (!emailOptional.isEmpty()) {
+            throw new BadRequestException("Email already exists");
+        }
+
+        User user = User.builder()
+                .username(userRegister.getUsername())
+                .email(userRegister.getEmail())
+                .password(passwordEncoder.encode(userRegister.getPassword()))
+                .role("USER")
+                .phone(userRegister.getPhone())
+                .build();
+
+        User savedUser = repository.save(user);
+        return new LoginResult(mapper.toDto(savedUser), true);
+    }
+
     public UserDTO getUserByUsername(String username) {
         validateUsername(username);
         return repository.findByUsername(username).map(mapper::toDto)
@@ -31,17 +61,30 @@ public class UserService {
     }
 
     public boolean checkPassword(CheckPasswordRequest request) {
-        if (request == null) throw new BadRequestException("Credentials are required");
-        validateUsername(request.username());
-        if (request.password() == null || request.password().isBlank()) {
+        if (request == null) {
+            throw new BadRequestException("Credentials are required");
+        }
+        return isLogin(request.username(), request.password()).isLogin();
+    }
+
+    public LoginResult isLogin(String username, String password) {
+        validateUsername(username);
+        if (password == null || password.isBlank()) {
             throw new BadRequestException("Password must not be blank");
         }
-        // A password only authenticates the account named in this request.
-        return repository.findByUsername(request.username())
-                .filter(user -> "ACTIVE".equals(user.getStatus()))
-                .filter(user -> user.getPassword() != null)
-                .map(user -> passwordEncoder.matches(request.password(), user.getPassword()))
-                .orElse(false);
+        Optional<User> userOptional = repository.findByUsername(username);
+        if (userOptional.isEmpty()) {
+            return new LoginResult(null, false);
+        }
+        if (userOptional.get().getStatus() == null || !"ACTIVE".equals(userOptional.get().getStatus())) {
+            return new LoginResult(null, false);
+        }
+
+        boolean isPasswordMatch = passwordEncoder.matches(password, userOptional.get().getPassword());
+        if (!isPasswordMatch) {
+            return new LoginResult(null, false);
+        }
+        return new LoginResult(mapper.toDto(userOptional.get()), true);
     }
 
     private void validateUsername(String username) {

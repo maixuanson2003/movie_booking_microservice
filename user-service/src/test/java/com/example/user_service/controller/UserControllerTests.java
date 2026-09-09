@@ -15,12 +15,46 @@ import com.example.user_service.exception.ResourceNotFoundException;
 import com.example.user_service.service.UserService;
 import com.example.user_service.sharedLogic.dto.CheckPasswordRequest;
 import com.example.user_service.sharedLogic.dto.UserDTO;
+import com.example.user_service.sharedLogic.dto.LoginResult;
 
 @WebMvcTest(UserController.class)
 @Import(SecurityConfig.class)
 class UserControllerTests {
     @Autowired private MockMvc mvc;
     @MockitoBean private UserService service;
+
+    @Test
+    void registrationIsAccessibleAndReturnsCreatedUser() throws Exception {
+        UserDTO dto = new UserDTO();
+        dto.setUsername("alice");
+        when(service.registerUser(any())).thenReturn(new LoginResult(dto, true));
+        mvc.perform(post("/api/users/register").contentType("application/json")
+                .content("{\"username\":\"alice\",\"email\":\"alice@example.com\",\"password\":\"correct\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.isLogin").value(true))
+                .andExpect(jsonPath("$.data.userDto.username").value("alice"));
+        verify(service).registerUser(argThat(request -> "alice@example.com".equals(request.getEmail())
+                && "correct".equals(request.getPassword())));
+    }
+
+    @Test
+    void loginReturnsUserAndExactIsLoginField() throws Exception {
+        UserDTO dto = new UserDTO();
+        dto.setUsername("alice");
+        when(service.isLogin("alice", "correct")).thenReturn(new LoginResult(dto, true));
+        mvc.perform(post("/api/users/isLogin").contentType("application/json")
+                .content("{\"username\":\"alice\",\"password\":\"correct\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.isLogin").value(true))
+                .andExpect(jsonPath("$.data.userDto.username").value("alice"))
+                .andExpect(jsonPath("$.data.userDto.password").doesNotExist());
+        when(service.isLogin("alice", "wrong")).thenReturn(new LoginResult(null, false));
+        mvc.perform(post("/api/users/isLogin").contentType("application/json")
+                .content("{\"username\":\"alice\",\"password\":\"wrong\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.isLogin").value(false))
+                .andExpect(jsonPath("$.data.userDto").doesNotExist());
+    }
 
     @Test
     void anonymousLookupReturnsEnvelope() throws Exception {

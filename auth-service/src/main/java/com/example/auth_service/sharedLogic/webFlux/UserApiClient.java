@@ -7,6 +7,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 import com.example.auth_service.sharedLogic.dto.UserDTO;
+import com.example.auth_service.sharedLogic.dto.LoginResult;
+import com.example.auth_service.sharedLogic.dto.request.UserRegister;
 import com.example.auth_service.exception.BadRequestException;
 import reactor.core.publisher.Mono;
 
@@ -14,7 +16,7 @@ import reactor.core.publisher.Mono;
 public class UserApiClient extends BaseWebFlux {
     private static final ParameterizedTypeReference<ResponseFromWebFlux<UserDTO>> USER_RESPONSE_TYPE = new ParameterizedTypeReference<>() {
     };
-    private static final ParameterizedTypeReference<ResponseFromWebFlux<Boolean>> CHECK_PASSWORD_RESPONSE_TYPE = new ParameterizedTypeReference<>() {
+    private static final ParameterizedTypeReference<ResponseFromWebFlux<LoginResult>> LOGIN_RESPONSE_TYPE = new ParameterizedTypeReference<>() {
     };
 
     public UserApiClient(WebClient webClient, @Value("${clients.user.timeout:5s}") Duration timeout) {
@@ -42,14 +44,36 @@ public class UserApiClient extends BaseWebFlux {
                 });
     }
 
-    public Mono<Boolean> checkPassword(String username, String password) {
+    public Mono<LoginResult> register(UserRegister request) {
+        if (request == null || request.getUsername() == null || request.getUsername().isBlank()
+                || request.getEmail() == null || request.getEmail().isBlank()
+                || request.getPassword() == null || request.getPassword().isBlank()) {
+            return Mono.error(new BadRequestException("Username, email and password must not be blank"));
+        }
+        return handleResponse(webClient.post().uri("/api/users/register")
+                .bodyValue(request).retrieve(), LOGIN_RESPONSE_TYPE)
+                .map(result -> {
+                    if (result.userDto() != null) {
+                        result.userDto().setPassword(null);
+                    }
+                    return result;
+                });
+    }
+
+    public Mono<LoginResult> isLogin(String username, String password) {
         if (username == null || username.isBlank() || password == null || password.isBlank()) {
             return Mono.error(new BadRequestException("Username and password must not be blank"));
         }
         return handleResponse(
-                webClient.post().uri("/api/users/check-password")
+                webClient.post().uri("/api/users/isLogin")
                         .bodyValue(Map.of("username", username, "password", password)).retrieve(),
-                CHECK_PASSWORD_RESPONSE_TYPE);
+                LOGIN_RESPONSE_TYPE)
+                .map(result -> {
+                    if (result.userDto() != null) {
+                        result.userDto().setPassword(null);
+                    }
+                    return result;
+                });
     }
 
 }
