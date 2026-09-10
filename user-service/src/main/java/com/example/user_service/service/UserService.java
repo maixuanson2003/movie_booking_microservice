@@ -1,6 +1,9 @@
 package com.example.user_service.service;
 
+
+
 import java.util.Optional;
+
 
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -18,15 +21,20 @@ import com.example.user_service.sharedLogic.mapper.UserMapper;
 
 @Service
 @Transactional(readOnly = true)
-public class UserService {
+public class UserService extends BaseService<User, Long> {
     private final UserRepository repository;
     private final UserMapper mapper;
     private final PasswordEncoder passwordEncoder;
 
-    public UserService(UserRepository repository, UserMapper mapper, PasswordEncoder passwordEncoder) {
+    private final RegistrationOutbox registrationOutbox;
+
+    public UserService(UserRepository repository, UserMapper mapper, PasswordEncoder passwordEncoder,
+            RegistrationOutbox registrationOutbox) {
+        super(repository);
         this.repository = repository;
         this.mapper = mapper;
         this.passwordEncoder = passwordEncoder;
+        this.registrationOutbox = registrationOutbox;
     }
 
     @Transactional
@@ -51,6 +59,7 @@ public class UserService {
                 .build();
 
         User savedUser = repository.save(user);
+        registrationOutbox.enqueue(savedUser);
         return new LoginResult(mapper.toDto(savedUser), true);
     }
 

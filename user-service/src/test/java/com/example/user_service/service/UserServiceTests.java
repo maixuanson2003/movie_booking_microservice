@@ -30,11 +30,14 @@ class UserServiceTests {
         assertTrue(result.isLogin());
         assertEquals(42L, result.userDto().getId());
         assertNull(result.userDto().getPassword());
+        verify(outbox).enqueue(argThat(user -> user.getId().equals(42L)
+                && user.getEmail().equals("alice@example.com")));
     }
 
     private final UserRepository repository = mock(UserRepository.class);
     private final BCryptPasswordEncoder encoder = new BCryptPasswordEncoder(4);
-    private final UserService service = new UserService(repository, new UserMapper(), encoder);
+    private final RegistrationOutbox outbox = mock(RegistrationOutbox.class);
+    private final UserService service = new UserService(repository, new UserMapper(), encoder, outbox);
 
     private User account() {
         User user = new User();

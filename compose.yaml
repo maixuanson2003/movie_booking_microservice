@@ -28,6 +28,7 @@ services:
     restart: unless-stopped
     environment:
       SERVER_PORT: 8081
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       EUREKA_SERVER_URL: ${EUREKA_SERVER_URL:-http://host.docker.internal:8761/eureka/}
       DB_HOST: postgres
       DB_PORT: 5432
@@ -37,6 +38,8 @@ services:
     ports:
       - "127.0.0.1:8081:8081"
     depends_on:
+      kafka-init:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
 
@@ -116,6 +119,39 @@ services:
       postgres:
         condition: service_healthy
 
+  email-service:
+    build:
+      context: ./email-service
+      dockerfile: ../Dockerfile
+    restart: unless-stopped
+    environment:
+      SERVER_PORT: 8087
+      EUREKA_SERVER_URL: ${EUREKA_SERVER_URL:-http://host.docker.internal:8761/eureka/}
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: movie_booking
+      DB_USER: movie_app
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:?Set APP_DB_PASSWORD in .env}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      MAIL_HOST: ${MAIL_HOST:-localhost}
+      MAIL_PORT: ${MAIL_PORT:-587}
+      MAIL_USERNAME: ${MAIL_USERNAME:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      MAIL_FROM: ${MAIL_FROM:-${MAIL_USERNAME:-}}
+      MAIL_SMTP_AUTH: ${MAIL_SMTP_AUTH:-true}
+      MAIL_STARTTLS_ENABLE: ${MAIL_STARTTLS_ENABLE:-true}
+      MAIL_STARTTLS_REQUIRED: ${MAIL_STARTTLS_REQUIRED:-true}
+      MAIL_SSL_ENABLE: ${MAIL_SSL_ENABLE:-false}
+    ports:
+      - "127.0.0.1:8087:8087"
+    depends_on:
+      kafka-init:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+
   redis:
     image: redis:7.4-alpine
     restart: unless-stopped
@@ -171,7 +207,7 @@ services:
     entrypoint: [/bin/bash, -ec]
     command:
       - |
-        for topic in booking.events seat.events payment.events notification.events booking.dlt seat.dlt payment.dlt notification.dlt; do
+        for topic in user-registered user-registered.DLT booking.events seat.events payment.events notification.events booking.dlt seat.dlt payment.dlt notification.dlt; do
           /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:29092 --create --if-not-exists --topic "$$topic" --partitions 3 --replication-factor 1
         done
     restart: "no"
