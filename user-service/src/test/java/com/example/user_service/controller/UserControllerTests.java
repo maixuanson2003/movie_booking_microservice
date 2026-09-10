@@ -18,10 +18,31 @@ import com.example.user_service.sharedLogic.dto.UserDTO;
 import com.example.user_service.sharedLogic.dto.LoginResult;
 
 @WebMvcTest(UserController.class)
-@Import(SecurityConfig.class)
+@Import({SecurityConfig.class, com.example.user_service.service.jwt.JwtService.class})
 class UserControllerTests {
     @Autowired private MockMvc mvc;
     @MockitoBean private UserService service;
+
+    @Test
+    void middlewareMakesAuthInfoAvailableToServiceAndDoesNotLeakToNextRequest() throws Exception {
+        var jwtService = new com.example.user_service.service.jwt.JwtService();
+        String token = jwtService.createToken(com.example.user_service.sharedLogic.dto.AuthInfo.builder()
+                .id(42L).username("alice").role("USER").build());
+        when(service.getUserByUsername("alice")).thenAnswer(invocation -> {
+            var info = new com.example.user_service.config.RequestContext().getAuthInfo();
+            org.junit.jupiter.api.Assertions.assertEquals(42L, info.getId());
+            return new UserDTO();
+        });
+        mvc.perform(get("/api/users/username/alice").cookie(new jakarta.servlet.http.Cookie("token", token)))
+                .andExpect(status().isOk());
+        when(service.getUserByUsername("bob")).thenAnswer(invocation -> {
+            org.junit.jupiter.api.Assertions.assertNull(new com.example.user_service.config.RequestContext().getAuthInfo());
+            org.junit.jupiter.api.Assertions.assertEquals("anonymousUser",
+                    org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication().getPrincipal());
+            return new UserDTO();
+        });
+        mvc.perform(get("/api/users/username/bob")).andExpect(status().isOk());
+    }
 
     @Test
     void registrationIsAccessibleAndReturnsCreatedUser() throws Exception {
